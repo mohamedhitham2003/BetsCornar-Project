@@ -1,0 +1,116 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Customer;
+use App\Models\Invoice;
+use App\Models\Product;
+use Illuminate\Support\Facades\DB;
+use RuntimeException;
+
+class InvoiceService
+{
+    public function __construct(
+        private readonly StockService $stockService,
+    ) {}
+
+    /**
+     * Generate a sequential, unique invoice number like INV-000001.
+     * Uses a DB-level lock to prevent race conditions.
+     */
+    public function generateInvoiceNumber(): string
+    {
+        $last = Invoice::query()
+            ->lockForUpdate()
+            ->orderByDesc('id')
+            ->value('invoice_number');
+
+        if ($last && preg_match('/INV-(\d+)/', $last, $m)) {
+            $next = (int) $m[1] + 1;
+        } else {
+            $next = 1;
+        }
+
+        return 'INV-' . str_pad($next, 6, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Save a quick-sale invoice within a DB transaction.
+     *
+     * Expected $data keys:
+     *   customer_name (string),
+     *   customer_phone? (string, optional),
+     *   items => [['product_id', 'quantity', 'unit_price'], ...]
+     *
+     * @throws RuntimeException on insufficient vaccine stock
+     */
+    public function saveQuickSale(array $data): Invoice
+    {
+        return DB::transaction(function () use ($data) {
+            $customerId = null;
+            $customerName = trim((string) ($data['customer_name'] ?? ''));
+            if ($customerName === '') {
+                $customerName = __('invoices.messages.walk_in_customer');
+            }
+
+            // Optionally link to existing customer by phone
+            if (!empty($data['customer_phone'])) {
+                $normalizedPhone = $this->normalizePhone($data['customer_phone']);
+                $customer = Customer::where('phone', '=', $normalizedPhone)->first(['*']);
+                if ($customer) {
+                    $customerId = $customer->id;
+                }
+            }
+
+            $invoice = Invoice::create([
+                'invoice_number' => $this->generateInvoiceNumber(),
+                'customer_id'    => $customerId,
+                'customer_name'  => $customerName,
+                'source'         => 'quick_sale',
+                'total'          => 0,
+                'status'         => 'confirmed',
+            ]);
+
+            $lineTotal = 0.0;
+
+            foreach ($data['items'] as $item) {
+                $product  = Product::lockForUpdate()->findOrFail((int) $item['product_id']);
+                $qty      = round((float) $item['quantity'], 2);
+                $price    = round((float) $item['unit_price'], 2);
+                $total    = round($qty * $price, 2);
+
+                $invoiceItem = $invoice->items()->create([
+                    'product_id' => $product->id,
+                    'quantity'   => $qty,
+                    'unit_price' => $price,
+                    'line_total' => $total,
+                ]);
+
+                $lineTotal += $total;
+
+                // Deduct stock — vaccines use FEFO, no vaccination record created
+                if ($product->track_stock) {
+                    if ($product->type === 'vaccination') {
+                        $this->stockService->deductVaccineStockFefo($product, $qty, $invoiceItem);
+                    } else {
+                        $this->stockService->decreaseStock($product, $qty);
+                    }
+                }
+            }
+
+            $invoice->update(['total' => round($lineTotal, 2)]);
+
+            return $invoice;
+        });
+    }
+
+    private function normalizePhone(string $phone): string
+    {
+        $digits = preg_replace('/\D/', '', $phone);
+        $digits = ltrim($digits, '0');
+        if (!str_starts_with($digits, '20')) {
+            $digits = '20' . $digits;
+        }
+        return $digits;
+    }
+}

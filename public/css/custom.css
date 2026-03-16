@@ -1,0 +1,137 @@
+/* Typography and Spacing Enhancements */
+body {
+    font-family: 'Tajawal', system-ui, -apple-system, sans-serif;
+    line-height: 1.7;
+    letter-spacing: 0.3px;
+    background: #f8fafb;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.5px;
+    font-weight: 700;
+}
+
+/* Smooth transitions for interactive elements */
+a, button, input, select, textarea {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Custom scrollbar with gradients */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f0f4f8;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #3b82f6 0%, #0ea5e9 100%);
+    border-radius: 10px;
+    border: 2px solid #f0f4f8;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #2563eb 0%, #06b6d4 100%);
+}
+
+/* Selection styling with gradient */
+::selection {
+    background: linear-gradient(90deg, #2563eb 0%, #0ea5e9 100%);
+    color: white;
+}
+
+/* Form enhancements */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+input[type="time"],
+textarea,
+select {
+    outline: none;
+}
+
+/* Enhanced focus state with shadow */
+input:focus,
+select:focus,
+textarea:focus {
+    box-shadow: 0 0 0 3px rgb(59 130 246 / 0.2);
+}
+
+/* Smooth animations */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* Pagination styling for Tailwind */
+.pagination {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 2rem;
+}
+
+.pagination li {
+    list-style: none;
+    animation: fadeInUp 0.3s ease;
+}
+
+.pagination a,
+.pagination span {
+    padding: 0.625rem 0.875rem;
+    border-radius: 0.75rem;
+    border: 2px solid #e2e8f0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition: all 0.2s;
+    background: white;
+    color: #1e293b;
+}
+
+.pagination a {
+    color: #1e293b;
+}
+
+.pagination a:hover {
+    background: linear-gradient(135deg, #eff6ff 0%, #e0f2fe 100%);
+    border-color: #3b82f6;
+    color: #1e40af;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+.pagination a.active {
+    background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%);
+    color: white;
+    border-color: #0ea5e9;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    font-weight: 700;
+}
+
+.pagination li.disabled span {
+    color: #cbd5e1;
+    background-color: #f1f5f9;
+    cursor: not-allowed;
+}
