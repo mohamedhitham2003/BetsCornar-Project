@@ -15,26 +15,37 @@
         </a>
 
         <div class="nav-label mt-2">الوحدات</div>
-        <a href="{{ route('customers.index') }}"
-           class="sidebar-link {{ request()->routeIs('customers.*') ? 'active' : '' }}">
-            <i class="bi bi-people-fill"></i> {{ __('messages.nav_customers') }}
-        </a>
-        <a href="{{ route('invoices.index') }}"
-           class="sidebar-link {{ request()->routeIs('invoices.*') ? 'active' : '' }}">
-            <i class="bi bi-receipt"></i> {{ __('messages.nav_invoices') }}
-        </a>
-        <a href="{{ route('products.index') }}"
-           class="sidebar-link {{ request()->routeIs('products.*') ? 'active' : '' }}">
-            <i class="bi bi-box-seam-fill"></i> {{ __('messages.nav_products') }}
-        </a>
-        <a href="{{ route('vaccine-batches.index') }}"
-           class="sidebar-link {{ request()->routeIs('vaccine-batches.*') ? 'active' : '' }}">
-            <i class="bi bi-capsule-pill"></i> {{ __('messages.nav_vaccine_batches') }}
-        </a>
-        <a href="{{ route('vaccinations.index') }}"
-           class="sidebar-link {{ request()->routeIs('vaccinations.*') ? 'active' : '' }}">
-            <i class="bi bi-shield-plus"></i> {{ __('messages.nav_vaccinations') }}
-        </a>
+        {{-- تم التعديل: إظهار روابط الإدارة فقط للأدمن --}}
+        @role('admin')
+            <a href="{{ route('customers.index') }}"
+               class="sidebar-link {{ request()->routeIs('customers.*') ? 'active' : '' }}">
+                <i class="bi bi-people-fill"></i> {{ __('messages.nav_customers') }}
+            </a>
+            <a href="{{ route('invoices.index') }}"
+               class="sidebar-link {{ request()->routeIs('invoices.*') ? 'active' : '' }}">
+                <i class="bi bi-receipt"></i> {{ __('messages.nav_invoices') }}
+            </a>
+            <a href="{{ route('products.index') }}"
+               class="sidebar-link {{ request()->routeIs('products.*') ? 'active' : '' }}">
+                <i class="bi bi-box-seam-fill"></i> {{ __('messages.nav_products') }}
+            </a>
+            <a href="{{ route('vaccine-batches.index') }}"
+               class="sidebar-link {{ request()->routeIs('vaccine-batches.*') ? 'active' : '' }}">
+                <i class="bi bi-capsule-pill"></i> {{ __('messages.nav_vaccine_batches') }}
+            </a>
+            <a href="{{ route('vaccinations.index') }}"
+               class="sidebar-link {{ request()->routeIs('vaccinations.*') ? 'active' : '' }}">
+                <i class="bi bi-shield-plus"></i> {{ __('messages.nav_vaccinations') }}
+            </a>
+
+            {{-- تم الإضافة: رابط إدارة المستخدمين (يظهر للأدمن فقط) --}}
+            @if (\Illuminate\Support\Facades\Route::has('users.index'))
+                <a href="{{ route('users.index') }}"
+                   class="sidebar-link {{ request()->routeIs('users.*') ? 'active' : '' }}">
+                    <i class="bi bi-people-fill"></i> المستخدمين
+                </a>
+            @endif
+        @endrole
     </nav>
 
     <div class="sidebar-footer">
