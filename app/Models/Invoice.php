@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\User;
 
 class Invoice extends Model
 {
@@ -18,6 +19,8 @@ class Invoice extends Model
         'source',
         'total',
         'status',
+        // تم الإضافة: تتبع المستخدم الذي أنشأ الفاتورة
+        'created_by',
         'cancellation_reason',
         'cancelled_at',
     ];
@@ -34,6 +37,12 @@ class Invoice extends Model
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
+    }
+
+    // تم الإضافة: علاقة المستخدم الذي أنشأ الفاتورة
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 
     public function items(): HasMany

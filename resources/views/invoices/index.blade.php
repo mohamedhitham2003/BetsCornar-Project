@@ -6,122 +6,153 @@
 @section('content')
 
     @php
-        // Overriding the controller's query to apply the requested logic entirely within the view
-$q = request('q', '');
-$source = request('source', '');
-$period = request('period', 'today'); // Default period
+        $isEmployee = auth()->user()->hasRole('employee');
+        $hasFilters = false;
 
-// 1. Build Base Query for Counting without the period filter
-$baseQuery = \App\Models\Invoice::query()
-    ->when($q, function ($query) use ($q) {
-        $query->where(function ($subQuery) use ($q) {
-            $subQuery->where('invoice_number', 'like', "%{$q}%")->orWhere('customer_name', 'like', "%{$q}%");
-        });
-    })
-    ->when($source, function ($query) use ($source) {
-        $query->where('source', $source);
-    });
+        if (!$isEmployee) {
+            // Overriding the controller's query to apply the requested logic entirely within the view for admins
+            $q = request('q', '');
+            $source = request('source', '');
+            $period = request('period', 'today'); // Default period
+            $date = request('date');
 
-// 2. Compute Tab Counts based on the current search text and source filters
-$countToday = (clone $baseQuery)->whereDate('created_at', today())->count();
-$countMonth = (clone $baseQuery)
-    ->whereMonth('created_at', today()->month)
-    ->whereYear('created_at', today()->year)
-    ->count();
-$countAll = (clone $baseQuery)->count();
+            // 1. Build Base Query for Counting without the period filter
+            $baseQuery = \App\Models\Invoice::query()
+                ->when($q, function ($query) use ($q) {
+                    $query->where(function ($subQuery) use ($q) {
+                        $subQuery->where('invoice_number', 'like', "%{$q}%")->orWhere('customer_name', 'like', "%{$q}%");
+                    });
+                })
+                ->when($source, function ($query) use ($source) {
+                    $query->where('source', $source);
+                });
 
-// 3. Apply the period filter for the actual list
-$query = clone $baseQuery;
-if ($period === 'today') {
-    $query->whereDate('created_at', today());
-} elseif ($period === 'month') {
-    $query->whereMonth('created_at', today()->month)->whereYear('created_at', today()->year);
-} // 'all' requires no extra filter
+            // 2. Compute Tab Counts based on the current search text and source filters
+            $countToday = (clone $baseQuery)->whereDate('created_at', today())->count();
+            $countMonth = (clone $baseQuery)
+                ->whereMonth('created_at', today()->month)
+                ->whereYear('created_at', today()->year)
+                ->count();
+            $countAll = (clone $baseQuery)->count();
 
-$invoices = $query->with('customer')->latest()->paginate(25)->withQueryString();
+            // 3. Apply the period filter for the actual list
+            $query = clone $baseQuery;
+            if ($date) {
+                // Ignore tab logic completely
+                $query->whereDate('created_at', $date);
+            } else {
+                if ($period === 'today') {
+                    $query->whereDate('created_at', today());
+                } elseif ($period === 'month') {
+                    $query->whereMonth('created_at', today()->month)->whereYear('created_at', today()->year);
+                } // 'all' requires no extra filter
+            }
 
-$hasFilters = request()->hasAny(['q', 'source', 'period', 'page']);
+            $invoices = $query->with('customer')->latest()->paginate(25)->withQueryString();
+
+            $hasFilters = request()->hasAny(['q', 'source', 'period', 'date', 'page']);
+        }
     @endphp
 
-    @if (!$hasFilters)
-        <script>
-            // Redirect seamlessly to apply default period filter on first load
-            window.location.replace("{{ route('invoices.index', ['period' => 'today']) }}");
-        </script>
-    @endif
+    @role('admin')
+        @if (!$hasFilters)
+            <script>
+                // Redirect seamlessly to apply default period filter on first load
+                window.location.replace("{{ route('invoices.index', ['period' => 'today']) }}");
+            </script>
+        @endif
 
-    <div class="card mb-4 shadow-sm border-0">
-        <div class="card-body pb-0">
-            {{-- Filter Tabs --}}
-            <ul class="nav nav-tabs border-0 gap-2 mb-3">
-                <li class="nav-item">
-                    <a class="nav-link {{ $period === 'today' ? 'active fw-bold border-bottom flex-column bg-light' : 'text-muted' }}"
-                        href="{{ request()->fullUrlWithQuery(['period' => 'today', 'page' => null]) }}"
-                        @if ($period === 'today') style="border-bottom-width: 3px !important; border-bottom-color: #0d6efd !important;" @endif>
-                        اليوم
-                        <span
-                            class="badge {{ $period === 'today' ? 'bg-primary' : 'bg-secondary' }} ms-1 rounded-pill">{{ $countToday }}</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {{ $period === 'month' ? 'active fw-bold border-bottom bg-light' : 'text-muted' }}"
-                        href="{{ request()->fullUrlWithQuery(['period' => 'month', 'page' => null]) }}"
-                        @if ($period === 'month') style="border-bottom-width: 3px !important; border-bottom-color: #0d6efd !important;" @endif>
-                        هذا الشهر
-                        <span
-                            class="badge {{ $period === 'month' ? 'bg-primary' : 'bg-secondary' }} ms-1 rounded-pill">{{ $countMonth }}</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {{ $period === 'all' ? 'active fw-bold border-bottom bg-light' : 'text-muted' }}"
-                        href="{{ request()->fullUrlWithQuery(['period' => 'all', 'page' => null]) }}"
-                        @if ($period === 'all') style="border-bottom-width: 3px !important; border-bottom-color: #0d6efd !important;" @endif>
-                        الكل
-                        <span
-                            class="badge {{ $period === 'all' ? 'bg-primary' : 'bg-secondary' }} ms-1 rounded-pill">{{ $countAll }}</span>
-                    </a>
-                </li>
-            </ul>
+        <div class="card mb-4 shadow-sm border-0">
+            <div class="card-body pb-0">
+                {{-- Filter Tabs & Date Picker --}}
+                <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-3">
+                    <ul class="nav nav-tabs border-0 gap-2 m-0">
+                        <li class="nav-item">
+                            <a class="nav-link {{ !$date && $period === 'today' ? 'active fw-bold border-bottom flex-column bg-light' : 'text-muted' }}"
+                                href="{{ request()->fullUrlWithQuery(['period' => 'today', 'page' => null, 'date' => null]) }}"
+                                @if (!$date && $period === 'today') style="border-bottom-width: 3px !important; border-bottom-color: #0d6efd !important;" @endif>
+                                اليوم
+                                <span class="badge {{ !$date && $period === 'today' ? 'bg-primary' : 'bg-secondary' }} ms-1 rounded-pill">{{ $countToday }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {{ !$date && $period === 'month' ? 'active fw-bold border-bottom bg-light' : 'text-muted' }}"
+                                href="{{ request()->fullUrlWithQuery(['period' => 'month', 'page' => null, 'date' => null]) }}"
+                                @if (!$date && $period === 'month') style="border-bottom-width: 3px !important; border-bottom-color: #0d6efd !important;" @endif>
+                                هذا الشهر
+                                <span class="badge {{ !$date && $period === 'month' ? 'bg-primary' : 'bg-secondary' }} ms-1 rounded-pill">{{ $countMonth }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {{ !$date && $period === 'all' ? 'active fw-bold border-bottom bg-light' : 'text-muted' }}"
+                                href="{{ request()->fullUrlWithQuery(['period' => 'all', 'page' => null, 'date' => null]) }}"
+                                @if (!$date && $period === 'all') style="border-bottom-width: 3px !important; border-bottom-color: #0d6efd !important;" @endif>
+                                الكل
+                                <span class="badge {{ !$date && $period === 'all' ? 'bg-primary' : 'bg-secondary' }} ms-1 rounded-pill">{{ $countAll }}</span>
+                            </a>
+                        </li>
+                    </ul>
 
-            {{-- Search / Filter --}}
-            <form method="GET" action="{{ route('invoices.index') }}" class="row g-3 align-items-end mb-3">
-                <input type="hidden" name="period" value="{{ $period }}">
-                <div class="col-md-5">
-                    <label class="form-label text-muted">بحث</label>
-                    <div class="input-group">
-                        <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
-                        <input type="text" name="q" class="form-control" value="{{ $q }}"
-                            placeholder="{{ __('invoices.filters.search_placeholder') }}">
+                    <form method="GET" action="{{ route('invoices.index') }}" class="d-flex align-items-center gap-2 m-0" id="dateFilterForm">
+                        @if(request('q')) <input type="hidden" name="q" value="{{ request('q') }}"> @endif
+                        @if(request('source')) <input type="hidden" name="source" value="{{ request('source') }}"> @endif
+                        @if(request('status')) <input type="hidden" name="status" value="{{ request('status') }}"> @endif
+                        
+                        <label class="form-label text-muted m-0 text-nowrap">تاريخ محدد:</label>
+                        <input type="date" name="date" class="form-control" style="width: 150px;" value="{{ $date }}" onchange="document.getElementById('dateFilterForm').submit()">
+                        
+                        @if($date)
+                            <a href="{{ request()->fullUrlWithQuery(['date' => null, 'period' => 'today']) }}" class="btn btn-outline-danger text-nowrap" title="مسح التاريخ">
+                                <i class="bi bi-x-circle"></i> مسح
+                            </a>
+                        @endif
+                    </form>
+                </div>
+
+                {{-- Search / Filter --}}
+                <form method="GET" action="{{ route('invoices.index') }}" class="row g-3 align-items-end mb-3">
+                    <input type="hidden" name="period" value="{{ $period }}">
+                    <div class="col-md-5">
+                        <label class="form-label text-muted">بحث</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                            <input type="text" name="q" class="form-control" value="{{ $q }}"
+                                placeholder="{{ __('invoices.filters.search_placeholder') }}">
+                        </div>
                     </div>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label text-muted">{{ __('invoices.fields.source') }}</label>
-                    <select name="source" class="form-select" onchange="this.form.submit()">
-                        <option value="">{{ __('invoices.sources.all') }}</option>
-                        <option value="customer" {{ $source === 'customer' ? 'selected' : '' }}>
-                            {{ __('invoices.sources.customer') }}</option>
-                        <option value="quick_sale" {{ $source === 'quick_sale' ? 'selected' : '' }}>
-                            {{ __('invoices.sources.quick_sale') }}</option>
-                    </select>
-                </div>
-                <div class="col-md-3 d-flex gap-2">
-                    <button type="submit" class="btn btn-primary flex-fill">
-                        بحث
-                    </button>
-                    <a href="{{ route('invoices.index', ['period' => $period]) }}" class="btn btn-outline-secondary"
-                        title="إعادة ضبط">
-                        <i class="bi bi-arrow-clockwise"></i>
-                    </a>
-                </div>
-            </form>
+                    <div class="col-md-4">
+                        <label class="form-label text-muted">{{ __('invoices.fields.source') }}</label>
+                        <select name="source" class="form-select" onchange="this.form.submit()">
+                            <option value="">{{ __('invoices.sources.all') }}</option>
+                            <option value="customer" {{ $source === 'customer' ? 'selected' : '' }}>
+                                {{ __('invoices.sources.customer') }}</option>
+                            <option value="quick_sale" {{ $source === 'quick_sale' ? 'selected' : '' }}>
+                                {{ __('invoices.sources.quick_sale') }}</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary flex-fill">
+                            بحث
+                        </button>
+                        <a href="{{ route('invoices.index', ['period' => $period]) }}" class="btn btn-outline-secondary"
+                            title="إعادة ضبط">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </a>
+                    </div>
+                </form>
+            </div>
         </div>
-    </div>
+    @endrole
 
     {{-- Header --}}
     <div class="d-flex align-items-center justify-content-between mb-3">
         <span class="fw-bold fs-5">
             <i class="bi bi-receipt text-primary me-2"></i>
-            {{ $invoices->total() }} فاتورة
+            @if(auth()->user()->hasRole('employee'))
+                فواتير اليوم
+            @else
+                {{ $invoices->total() }} فاتورة
+            @endif
         </span>
         <a href="{{ route('invoices.create') }}" class="btn btn-success fw-bold shadow-sm">
             <i class="bi bi-lightning-fill me-1"></i>{{ __('invoices.actions.add') }}

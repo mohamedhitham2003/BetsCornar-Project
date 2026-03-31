@@ -5,6 +5,17 @@
 
 @section('content')
 
+    <style>
+        @media print {
+            .sidebar, .navbar, .btn, .no-print {
+                display: none !important;
+            }
+            body {
+                background: white !important;
+            }
+        }
+    </style>
+
     {{-- تنبيه يظهر فقط إذا كانت الفاتورة ملغية --}}
     @if ($invoice->isCancelled())
         <div class="alert alert-danger d-flex align-items-center gap-2 mb-4">
@@ -76,9 +87,15 @@
                     </table>
                 </div>
             </div>
-            <div class="mt-3">
+            <div class="mt-3 no-print">
                 <a href="{{ route('invoices.index') }}" class="btn btn-outline-secondary">
                     <i class="bi bi-arrow-right me-1"></i>{{ __('messages.back') }}
+                </a>
+                <button type="button" class="btn btn-info ms-2 text-white" onclick="window.print()">
+                    🖨️ طباعة
+                </button>
+                <a href="{{ route('invoices.pdf', $invoice) }}" class="btn btn-warning ms-2">
+                    📄 تحميل PDF
                 </a>
                 {{-- زرار الإلغاء يظهر فقط للفواتير المؤكدة --}}
                 @if ($invoice->isConfirmed())

@@ -7,6 +7,7 @@ use App\Models\Invoice;
 use App\Models\Product;
 use App\Services\InvoiceService;
 use Illuminate\Http\Request;
+use Mpdf\Mpdf;
 use RuntimeException;
 
 class InvoiceController extends Controller
@@ -20,10 +21,44 @@ class InvoiceController extends Controller
      */
     public function index(Request $request)
     {
+        // تم الإضافة: لو الموظف يشوف فواتيره النهارده بس
+        if (auth()->user()->hasRole('employee')) {
+            // حساب نافذة يوم العمل (تبدأ الساعة 2 صباحاً)
+            $now = \Carbon\Carbon::now();
+            $businessDayStart = $now->copy()->startOfDay()->addHours(2);
+
+            if ($now->lt($businessDayStart)) {
+                $periodStart = $businessDayStart->copy()->subDay();
+                $periodEnd = $businessDayStart->copy()->subSecond();
+            } else {
+                $periodStart = $businessDayStart;
+                $periodEnd = $businessDayStart->copy()->addDay()->subSecond();
+            }
+
+            $invoices = Invoice::query()
+                ->with('customer')
+                ->where('created_by', auth()->id())
+                ->whereBetween('created_at', [$periodStart, $periodEnd])
+                ->latest()
+                ->paginate(25)
+                ->withQueryString();
+
+            // الموظف يشوف قائمة بسيطة بدون فلاتر
+            return view('invoices.index', [
+                'invoices' => $invoices,
+                'q' => '',
+                'source' => '',
+                'status' => '',
+                'isEmployee' => true,
+            ]);
+        }
+
+        // لو الأدمن: المنطق الموجود كما هو
         $q = $request->input('q', '');
         $source = $request->input('source', '');
         // فلتر الحالة — مؤكدة أو ملغية
         $status = $request->input('status', '');
+        $date = $request->input('date');
 
         $invoices = Invoice::query()
             ->with('customer')
@@ -32,13 +67,13 @@ class InvoiceController extends Controller
                     ->orWhere('customer_name', 'like', "%{$q}%");
             })
             ->when($source, fn ($query) => $query->where('source', $source))
-            // تطبيق فلتر الحالة إذا تم اختياره
-            ->when($status, fn($query) => $query->where('status', $status))
+            ->when($status, fn ($query) => $query->where('status', $status))
+            ->when($date, fn ($query) => $query->whereDate('created_at', $date))
             ->latest()
             ->paginate(25)
             ->withQueryString();
 
-        return view('invoices.index', compact('invoices', 'q', 'source', 'status'));
+        return view('invoices.index', compact('invoices', 'q', 'source', 'status', 'date'));
     }
 
     /**
@@ -100,5 +135,35 @@ class InvoiceController extends Controller
         } catch (RuntimeException $e) {
             return back()->withErrors(['cancel' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * Download Invoice as PDF using mPDF natively
+     */
+    public function pdf(Invoice $invoice)
+    {
+        $invoice->load(['items.product', 'customer']);
+
+        // Render the view to HTML string
+        $html = view('invoices.pdf', compact('invoice'))->render();
+
+        // Initialize native mPDF
+        $mpdf = new Mpdf([
+            'mode' => 'utf-8',
+            'format' => 'A4',
+            'default_font' => 'sans-serif',
+            'autoScriptToLang' => true,
+            'autoLangToFont' => true,
+        ]);
+
+        $mpdf->SetDirectionality('rtl');
+        $mpdf->WriteHTML($html);
+
+        $filename = 'فاتورة-'.$invoice->invoice_number.'.pdf';
+
+        return response($mpdf->Output('', 'S'), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ]);
     }
 }

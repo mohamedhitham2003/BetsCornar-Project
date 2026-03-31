@@ -75,6 +75,8 @@ class CustomerVisitService
                 'source'         => 'customer',
                 'total'          => 0,
                 'status'         => 'confirmed',
+                // تم الإضافة: تتبع المستخدم الذي أنشأ الفاتورة
+                'created_by'     => auth()->id(),
             ]);
 
             $lineTotal = 0.0;

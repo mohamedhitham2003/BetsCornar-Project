@@ -41,6 +41,27 @@ class CustomerController extends Controller
     }
 
     /**
+     * تم الإضافة: بحث AJAX عن العملاء بالاسم أو الهاتف (للـ Quick Sale)
+     */
+    public function search(Request $request)
+    {
+        $q = trim($request->input('q', ''));
+
+        if (strlen($q) < 2) {
+            return response()->json([]);
+        }
+
+        $results = Customer::query()
+            ->where('name', 'like', "%{$q}%")
+            ->orWhere('phone', 'like', "%{$q}%")
+            ->orderBy('name')
+            ->limit(10)
+            ->get(['id', 'name', 'phone']);
+
+        return response()->json($results);
+    }
+
+    /**
      * Show the customer visit form.
      */
     public function create()

@@ -53,8 +53,15 @@ class InvoiceService
                 $customerName = __('invoices.messages.walk_in_customer');
             }
 
-            // Optionally link to existing customer by phone
-            if (! empty($data['customer_phone'])) {
+            // تم التعديل: ربط العميل — الأولوية لـ customer_id المُختار من البحث المباشر
+            if (! empty($data['customer_id'])) {
+                $customer = Customer::find((int) $data['customer_id']);
+                if ($customer) {
+                    $customerId   = $customer->id;
+                    $customerName = $customer->name;
+                }
+            } elseif (! empty($data['customer_phone'])) {
+                // fallback قديم: ربط عن طريق رقم الهاتف
                 $normalizedPhone = $this->normalizePhone($data['customer_phone']);
                 $customer = Customer::where('phone', '=', $normalizedPhone)->first(['*']);
                 if ($customer) {
@@ -69,6 +76,8 @@ class InvoiceService
                 'source' => 'quick_sale',
                 'total' => 0,
                 'status' => 'confirmed',
+                // تم الإضافة: تتبع المستخدم الذي أنشأ الفاتورة
+                'created_by' => auth()->id(),
             ]);
 
             $lineTotal = 0.0;

@@ -18,6 +18,9 @@
 
 @section('content')
 
+    <!-- Choices CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
+
     <form method="POST" action="{{ route('invoices.store') }}" id="quickSaleForm">
         @csrf
 
@@ -31,20 +34,33 @@
                         <span class="fw-bold">بيانات العميل</span>
                     </div>
                     <div class="card-body row g-3">
+                        {{-- تم التعديل: حقل بحث مباشر عن العميل بالاسم أو الهاتف --}}
                         <div class="col-12">
                             <label class="form-label">{{ __('invoices.fields.customer_name') }}</label>
-                            <input type="text" name="customer_name"
-                                class="form-control @error('customer_name') is-invalid @enderror"
-                                value="{{ old('customer_name') }}" placeholder="اسم العميل (اختياري)">
-                            @error('customer_name')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        <div class="col-12">
-                            <label class="form-label">{{ __('invoices.fields.customer_phone') }}</label>
-                            <input type="text" name="customer_phone" class="form-control"
-                                value="{{ old('customer_phone') }}" placeholder="01xxxxxxxxx (اختياري)">
-                            <div class="form-text text-muted">إذا كان موجودًا يتم ربط الفاتورة بالعميل تلقائيًا</div>
+                            {{-- حقل مخفي يحمل customer_id عند الاختيار --}}
+                            <input type="hidden" name="customer_id" id="customer_id" value="{{ old('customer_id') }}">
+                            <div class="position-relative" id="customer-search-wrap">
+                                <input type="text"
+                                       id="customer_name_display"
+                                       name="customer_name"
+                                       class="form-control @error('customer_name') is-invalid @enderror"
+                                       value="{{ old('customer_name') }}"
+                                       placeholder="ابحث بالاسم أو الهاتف..."
+                                       autocomplete="off">
+                                @error('customer_name')
+                                    <div class="invalid-feedback">{{ $message }}</div>
+                                @enderror
+                                {{-- نتائج البحث --}}
+                                <div id="customer-search-results"
+                                     style="display:none; position:absolute; top:100%; right:0; left:0; z-index:9999;
+                                            background:#fff; border:1px solid #ced4da; border-top:0;
+                                            border-radius:0 0 .25rem .25rem; max-height:220px; overflow-y:auto;
+                                            box-shadow:0 .5rem 1rem rgba(0,0,0,.15);">
+                                </div>
+                            </div>
+                            <div class="form-text text-muted">
+                                اكتب 2 أحرف أو أكثر للبحث — سيُربط الاسم بالعميل تلقائياً إذا وُجد
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -102,29 +118,6 @@
     </form>
 
     <style>
-        .product-select-wrap { position: relative; }
-        .product-select-trigger {
-            display: block; width: 100%; padding: 0.25rem 0.5rem; font-size: 0.875rem; font-weight: 400; line-height: 1.5;
-            color: #212529; background-color: #fff; border: 1px solid #ced4da; border-radius: 0.25rem;
-            text-align: right; cursor: pointer; -webkit-appearance: none; -moz-appearance: none; appearance: none;
-        }
-        .product-select-trigger:hover { border-color: #86b7fe; }
-        .product-select-dropdown {
-            display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 9999;
-            background: #fff; border: 1px solid #ced4da; border-top: 0; border-radius: 0 0 0.25rem 0.25rem;
-            max-height: 220px; overflow: hidden; box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
-        }
-        .product-select-wrap.open .product-select-dropdown { display: block; }
-        .product-select-search {
-            width: 100%; padding: 0.35rem 0.5rem; font-size: 0.875rem; border: 0; border-bottom: 1px solid #dee2e6;
-            outline: 0; box-sizing: border-box;
-        }
-        .product-select-options { max-height: 180px; overflow-y: auto; }
-        .product-select-option {
-            padding: 0.35rem 0.5rem; font-size: 0.875rem; cursor: pointer; text-align: right;
-        }
-        .product-select-option:hover:not(.product-option-oos) { background: #e9ecef; }
-        .product-option-oos { color: #999; cursor: not-allowed; }
         #quickSaleForm .card-body.p-0,
         #quickSaleForm .table-responsive { overflow: visible; }
         #quickSaleForm #items-table { overflow: visible; }
@@ -133,37 +126,72 @@
 @endsection
 
 @push('scripts')
+    <!-- Choices JS -->
+    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
     <script>
         const products = @json($productsJson);
         const selectProductPlaceholder = @json(__('invoices.messages.select_product'));
         let rowIdx = 0;
 
-        function isOutOfStock(p) {
+        function isProductOos(p) {
             return p.stock_status === 'out_of_stock' || (p.track_stock && p.quantity <= 0);
         }
 
-        function buildProductOptionsHtml() {
-            return products.map(function(p) {
-                var oos = isOutOfStock(p);
-                var label = oos ? p.name + ' (نفد المخزون)' : p.name;
-                var oosClass = oos ? ' product-option-oos' : '';
-                return '<div class="product-select-option' + oosClass + '" data-id="' + p.id + '" data-price="' + p.price + '">' + label + '</div>';
-            }).join('');
+        /* ─── Product Choices.js (AJAX, per-row) ─────────────────── */
+        function initProductSelect(selectEl) {
+            if (!selectEl) return;
+            const idx = selectEl.getAttribute('data-idx');
+
+            const instance = new Choices(selectEl, {
+                searchEnabled: true,
+                searchPlaceholderValue: 'ابحث عن منتج...',
+                noResultsText: 'لا توجد نتائج',
+                noChoicesText: 'اكتب للبحث...',
+                itemSelectText: '',
+                shouldSort: false,
+                allowHTML: false,
+            });
+
+            selectEl._choicesInstance = instance;
+
+            // Load all products statically
+            const choices = products.map(function(p) {
+                const oos = isProductOos(p);
+                return {
+                    value: String(p.id),
+                    label: p.name + (oos ? ' (نفد المخزون)' : ''),
+                    customProperties: { price: p.price },
+                    disabled: oos,
+                };
+            });
+            instance.setChoices(choices, 'value', 'label', true);
+
+            // Auto-fill unit price on selection
+            selectEl.addEventListener('change', function() {
+                const val = this.value;
+                if (!val) return;
+
+                // Get price directly from the selected choice in the instance
+                const selectedChoice = instance.getValue();
+                const price = selectedChoice && selectedChoice.customProperties ?
+                    selectedChoice.customProperties.price : 0;
+
+                const priceInput = document.querySelector('[name="items[' + idx + '][unit_price]"]');
+                if (priceInput) {
+                    priceInput.value = parseFloat(price || 0).toFixed(2);
+                    recalcRow(idx);
+                }
+            });
         }
 
         function addRow() {
             var idx = rowIdx++;
-            var optionsHtml = buildProductOptionsHtml();
             var row = '<tr id="row-' + idx + '">' +
                 '<td>' +
-                '<div class="product-select-wrap" data-row-idx="' + idx + '">' +
-                '<input type="hidden" name="items[' + idx + '][product_id]" value="" required>' +
-                '<div class="product-select-trigger">' + selectProductPlaceholder + '</div>' +
-                '<div class="product-select-dropdown">' +
-                '<input type="text" class="product-select-search" placeholder="بحث..." autocomplete="off">' +
-                '<div class="product-select-options">' + optionsHtml + '</div>' +
-                '</div>' +
-                '</div>' +
+                '<select name="items[' + idx + '][product_id]" ' +
+                'id="product-select-' + idx + '" class="form-select form-select-sm product-choices-select" ' +
+                'data-idx="' + idx + '" required>' +
+                '<option value=""></option></select>' +
                 '</td>' +
                 '<td><input type="number" name="items[' + idx +
                 '][quantity]" class="form-control form-control-sm" value="1" min="0.01" step="0.01" oninput="recalcRow(' +
@@ -178,7 +206,8 @@
                 '</tr>';
 
             document.getElementById('items-body').insertAdjacentHTML('beforeend', row);
-            initProductSelectSearch(document.getElementById('row-' + idx));
+            // Initialise Choices.js AFTER the row is in the DOM
+            initProductSelect(document.getElementById('product-select-' + idx));
         }
 
         function recalcRow(idx) {
@@ -190,7 +219,13 @@
 
         function removeRow(idx) {
             var el = document.getElementById('row-' + idx);
-            if (el) el.remove();
+            if (el) {
+                var sel = el.querySelector('.product-choices-select');
+                if (sel && sel._choicesInstance) {
+                    sel._choicesInstance.destroy();
+                }
+                el.remove();
+            }
             recalcGrandTotal();
         }
 
@@ -202,80 +237,73 @@
             document.getElementById('grand-total-display').textContent = total.toFixed(2);
         }
 
-        (function() {
-            function openDropdown(wrap) {
-                wrap.classList.add('open');
-                var search = wrap.querySelector('.product-select-search');
-                if (search) {
-                    search.value = '';
-                    search.style.display = '';
-                    setTimeout(function() { search.focus(); }, 0);
-                }
-                filterProductOptions(wrap, '');
-                document.addEventListener('click', closeOnClickOutside);
-            }
-            function closeDropdown(wrap) {
-                wrap.classList.remove('open');
-                document.removeEventListener('click', closeOnClickOutside);
-            }
-            function closeOnClickOutside(e) {
-                document.querySelectorAll('.product-select-wrap.open').forEach(function(w) {
-                    if (!w.contains(e.target)) closeDropdown(w);
-                });
-            }
-            function filterProductOptions(wrap, q) {
-                q = (q || '').trim().toLowerCase();
-                wrap.querySelectorAll('.product-select-option').forEach(function(el) {
-                    var text = (el.textContent || '').toLowerCase();
-                    el.style.display = (!q || text.indexOf(q) !== -1) ? '' : 'none';
-                });
-            }
-            function selectProduct(wrap, productId, price, label, idx) {
-                wrap.querySelector('input[name*="[product_id]"]').value = productId || '';
-                var trigger = wrap.querySelector('.product-select-trigger');
-                if (trigger) trigger.textContent = label || selectProductPlaceholder;
-                closeDropdown(wrap);
-                var priceEl = document.getElementById('price-' + idx);
-                if (priceEl) {
-                    priceEl.value = parseFloat(price || 0).toFixed(2);
-                    if (typeof recalcRow === 'function') recalcRow(idx);
-                }
-            }
-            function initProductSelectSearch(container) {
-                container = container || document;
-                (container.querySelectorAll ? container.querySelectorAll('.product-select-wrap') : []).forEach(function(wrap) {
-                    if (wrap._productSelectInit) return;
-                    wrap._productSelectInit = true;
-                    var idx = wrap.getAttribute('data-row-idx');
-                    var trigger = wrap.querySelector('.product-select-trigger');
-                    var dropdown = wrap.querySelector('.product-select-dropdown');
-                    var searchInput = wrap.querySelector('.product-select-search');
-                    var optionsContainer = wrap.querySelector('.product-select-options');
-                    if (!trigger || !dropdown || !optionsContainer) return;
-                    trigger.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (wrap.classList.contains('open')) closeDropdown(wrap);
-                        else openDropdown(wrap);
-                    });
-                    if (searchInput) {
-                        searchInput.addEventListener('input', function() { filterProductOptions(wrap, this.value); });
-                        searchInput.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeDropdown(wrap); });
-                    }
-                    optionsContainer.querySelectorAll('.product-select-option').forEach(function(opt) {
-                        if (opt.classList.contains('product-option-oos')) return;
-                        opt.addEventListener('click', function(e) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            selectProduct(wrap, this.getAttribute('data-id'), this.getAttribute('data-price'), this.textContent.trim(), idx);
-                        });
-                    });
-                });
-            }
-            window.initProductSelectSearch = initProductSelectSearch;
-        })();
-
         // Add first row on load
         addRow();
+
+        // تم الإضافة: بحث مباشر عن العميل (Live Search) بالاسم أو الهاتف
+        (function () {
+            var searchInput   = document.getElementById('customer_name_display');
+            var hiddenIdInput = document.getElementById('customer_id');
+            var resultsBox    = document.getElementById('customer-search-results');
+            var searchUrl     = '{{ route("customers.search") }}';
+            var debounceTimer = null;
+
+            function renderResults(customers) {
+                if (!customers.length) {
+                    resultsBox.innerHTML = '<div style="padding:.5rem .75rem;color:#888;font-size:.875rem;">لا توجد نتائج — سيُستخدم الاسم المدخل</div>';
+                    resultsBox.style.display = 'block';
+                    return;
+                }
+                resultsBox.innerHTML = customers.map(function (c) {
+                    return '<div class="customer-result-item" data-id="' + c.id + '" data-name="' + c.name + '"' +
+                           ' style="padding:.4rem .75rem;cursor:pointer;font-size:.875rem;border-bottom:1px solid #f0f0f0;">' +
+                           '<strong>' + c.name + '</strong> <span style="color:#888;font-size:.8rem;">' + c.phone + '</span></div>';
+                }).join('');
+                resultsBox.style.display = 'block';
+
+                // أحداث الاختيار
+                resultsBox.querySelectorAll('.customer-result-item').forEach(function (el) {
+                    el.addEventListener('mouseenter', function() { this.style.background = '#f5f5f5'; });
+                    el.addEventListener('mouseleave', function() { this.style.background = ''; });
+                    el.addEventListener('click', function () {
+                        hiddenIdInput.value   = this.getAttribute('data-id');
+                        searchInput.value     = this.getAttribute('data-name');
+                        resultsBox.style.display = 'none';
+                    });
+                });
+            }
+
+            function clearSelection() {
+                // إذا عدّل المستخدم النص بعد الاختيار نمسح الـ id
+                hiddenIdInput.value = '';
+            }
+
+            searchInput.addEventListener('input', function () {
+                clearSelection();
+                var q = this.value.trim();
+                clearTimeout(debounceTimer);
+
+                if (q.length < 2) {
+                    resultsBox.style.display = 'none';
+                    return;
+                }
+
+                debounceTimer = setTimeout(function () {
+                    fetch(searchUrl + '?q=' + encodeURIComponent(q), {
+                        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                    })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) { renderResults(data); })
+                    .catch(function () { resultsBox.style.display = 'none'; });
+                }, 250);
+            });
+
+            // إغلاق القائمة عند النقر خارجها
+            document.addEventListener('click', function (e) {
+                if (!document.getElementById('customer-search-wrap').contains(e.target)) {
+                    resultsBox.style.display = 'none';
+                }
+            });
+        })();
     </script>
 @endpush

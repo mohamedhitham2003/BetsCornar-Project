@@ -35,7 +35,7 @@ class StoreCustomerVisitRequest extends FormRequest
             'vaccinations.*.vaccine_quantity'   => ['required', 'numeric', 'min:0.01'],
             'vaccinations.*.vaccine_unit_price' => ['required', 'numeric', 'min:0'],
             'vaccinations.*.vaccination_date'   => ['required', 'date'],
-            'vaccinations.*.next_dose_date'     => ['nullable', 'date', 'after:vaccinations.*.vaccination_date'],
+            'vaccinations.*.next_dose_date'     => ['required', 'date', 'after:vaccinations.*.vaccination_date'],
 
             // ─── المنتجات/الخدمات الإضافية ──────────────────────
             'additional_items'                  => ['nullable', 'array'],

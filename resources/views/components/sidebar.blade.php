@@ -8,15 +8,15 @@
     </div>
 
     <nav class="sidebar-nav">
-        <div class="nav-label">الرئيسية</div>
-        <a href="{{ route('dashboard') }}"
-           class="sidebar-link {{ request()->routeIs('dashboard') ? 'active' : '' }}">
-            <i class="bi bi-speedometer2"></i> {{ __('messages.nav_dashboard') }}
-        </a>
-
-        <div class="nav-label mt-2">الوحدات</div>
-        {{-- تم التعديل: إظهار روابط الإدارة فقط للأدمن --}}
+        {{-- تم التعديل: روابط لوحة التحكم والإدارة للأدمن فقط --}}
         @role('admin')
+            <div class="nav-label">الرئيسية</div>
+            <a href="{{ route('dashboard') }}"
+               class="sidebar-link {{ request()->routeIs('dashboard') ? 'active' : '' }}">
+                <i class="bi bi-speedometer2"></i> {{ __('messages.nav_dashboard') }}
+            </a>
+
+            <div class="nav-label mt-2">الوحدات</div>
             <a href="{{ route('customers.index') }}"
                class="sidebar-link {{ request()->routeIs('customers.*') ? 'active' : '' }}">
                 <i class="bi bi-people-fill"></i> {{ __('messages.nav_customers') }}
@@ -37,14 +37,28 @@
                class="sidebar-link {{ request()->routeIs('vaccinations.*') ? 'active' : '' }}">
                 <i class="bi bi-shield-plus"></i> {{ __('messages.nav_vaccinations') }}
             </a>
-
             {{-- تم الإضافة: رابط إدارة المستخدمين (يظهر للأدمن فقط) --}}
-            @if (\Illuminate\Support\Facades\Route::has('users.index'))
-                <a href="{{ route('users.index') }}"
-                   class="sidebar-link {{ request()->routeIs('users.*') ? 'active' : '' }}">
-                    <i class="bi bi-people-fill"></i> المستخدمين
-                </a>
-            @endif
+            <a href="{{ route('users.index') }}"
+               class="sidebar-link {{ request()->routeIs('users.*') ? 'active' : '' }}">
+                <i class="bi bi-person-badge-fill"></i> المستخدمين
+            </a>
+        @endrole
+
+        {{-- تم الإضافة: روابط الموظف — تظهر فقط للموظف --}}
+        @role('employee')
+            <div class="nav-label">القائمة</div>
+            <a href="{{ route('invoices.index') }}"
+               class="sidebar-link {{ request()->routeIs('invoices.*') ? 'active' : '' }}">
+                <i class="bi bi-receipt"></i> الفواتير
+            </a>
+            <a href="{{ route('customers.create') }}"
+               class="sidebar-link {{ request()->routeIs('customers.create') ? 'active' : '' }}">
+                <i class="bi bi-plus-circle-fill"></i> زيارة جديدة
+            </a>
+            <a href="{{ route('invoices.create') }}"
+               class="sidebar-link {{ request()->routeIs('invoices.create') ? 'active' : '' }}">
+                <i class="bi bi-lightning-fill"></i> بيع سريع
+            </a>
         @endrole
     </nav>
 

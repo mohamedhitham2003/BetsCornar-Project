@@ -15,6 +15,7 @@ class StoreQuickSaleRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'customer_id'            => ['nullable', 'integer', Rule::exists('customers', 'id')],
             'customer_name'          => ['nullable', 'string', 'max:255'],
             'customer_phone'         => ['nullable', 'string', 'max:20'],
 

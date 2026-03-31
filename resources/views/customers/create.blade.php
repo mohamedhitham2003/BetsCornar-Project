@@ -219,9 +219,21 @@
                         'usable_qty' => (float) ($vaccineUsableQty[$v->id] ?? 0),
                     ];
                 });
+
+                $productsJson = $products->map(function ($p) {
+                    return [
+                        'id' => $p->id,
+                        'name' => $p->name,
+                        'price' => (float) $p->price,
+                        'stock_status' => $p->stock_status,
+                        'quantity' => (float) $p->quantity,
+                        'track_stock' => (bool) $p->track_stock,
+                    ];
+                });
             @endphp
 
             const vaccinesData = @json($vaccinesJson);
+            const productsData = @json($productsJson);
             const selectProductPlaceholder = @json(__('customers.visit.select_product_service'));
             const selectVaccinePlaceholder = @json(__('customers.visit.select_vaccine'));
             let itemIndex = 0;
@@ -273,7 +285,7 @@
                         </td>
                         <td>
                             <input type="date" name="vaccinations[${idx}][next_dose_date]"
-                                   class="form-control form-control-sm">
+                                   class="form-control form-control-sm" required>
                         </td>
                         <td>
                             <input type="text" class="form-control form-control-sm bg-light vacc-line-total"
@@ -364,7 +376,7 @@
                 recalcTotal();
             };
 
-            /* ─── Product Choices.js (AJAX, per-row) ─────────────────── */
+            /* ─── Product Choices.js (Local, per-row) ─────────────────── */
             function initProductSelect(selectEl) {
                 if (!selectEl) return;
                 const idx = selectEl.getAttribute('data-idx');
@@ -373,52 +385,32 @@
                     searchEnabled: true,
                     searchPlaceholderValue: 'ابحث عن منتج...',
                     noResultsText: 'لا توجد نتائج',
-                    noChoicesText: 'اكتب للبحث...',
                     itemSelectText: '',
                     shouldSort: false,
                     allowHTML: false,
                 });
 
-                // Store the instance for later destroy
                 selectEl._choicesInstance = instance;
 
-                // Debounced AJAX search
-                let debounceTimer;
-                selectEl.addEventListener('search', function(e) {
-                    clearTimeout(debounceTimer);
-                    debounceTimer = setTimeout(function() {
-                        const q = e.detail.value || '';
-                        fetch('/products/search?q=' + encodeURIComponent(q))
-                            .then(function(r) {
-                                return r.json();
-                            })
-                            .then(function(products) {
-                                const choices = products.map(function(p) {
-                                    const oos = isProductOos(p);
-                                    return {
-                                        value: String(p.id),
-                                        label: p.name + (oos ? ' (نفد المخزون)' : ''),
-                                        customProperties: {
-                                            price: p.price
-                                        },
-                                        disabled: oos,
-                                    };
-                                });
-                                instance.clearChoices();
-                                instance.setChoices(choices, 'value', 'label', true);
-                            })
-                            .catch(function() {
-                                /* silently ignore network errors */
-                            });
-                    }, 300);
+                // Load all products statically
+                const choices = productsData.map(function(p) {
+                    const oos = isProductOos(p);
+                    return {
+                        value: String(p.id),
+                        label: p.name + (oos ? ' (نفد المخزون)' : ''),
+                        customProperties: {
+                            price: p.price
+                        },
+                        disabled: oos,
+                    };
                 });
+                instance.setChoices(choices, 'value', 'label', true);
 
                 // Auto-fill unit price on selection
                 selectEl.addEventListener('change', function() {
                     const val = this.value;
                     if (!val) return;
 
-                    // Get price directly from the selected choice in the instance
                     const selectedChoice = instance.getValue();
                     const price = selectedChoice && selectedChoice.customProperties ?
                         selectedChoice.customProperties.price :

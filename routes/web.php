@@ -6,6 +6,7 @@ use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\VaccinationController;
 use App\Http\Controllers\VaccineBatchController;
+use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
 // تم الإضافة: مسارات تسجيل الدخول للزوار فقط (المسجّل يتم تحويله للوحة التحكم)
@@ -21,6 +22,11 @@ Route::middleware('auth')->group(function () {
 
     // تم التعديل: Dashboard تحت auth فقط مؤقتًا (بدون role)
     Route::get('/', function () {
+        // تم الإضافة: الموظف يُحوَّل تلقائياً إلى صفحة الفواتير بدلاً من لوحة التحكم
+        if (auth()->user()->hasRole('employee')) {
+            return redirect()->route('invoices.index');
+        }
+
         // ── Business day starts at 02:00 AM, not midnight ──────────────────
         // If current time is before 02:00 AM, we're still in "yesterday's" shift.
         $now = \Carbon\Carbon::now();
@@ -80,10 +86,16 @@ Route::middleware('auth')->group(function () {
         return view('home', compact('todayVisits', 'todayRevenue', 'totalProducts', 'totalVaccinations', 'upcomingVaccinations', 'lowStockProducts', 'expiredBatches', 'expiringSoonBatches'));
     })->name('dashboard');
 
-    // تم الإضافة: مسارات مشتركة (admin + employee) — زيارة العميل فقط
+    // تم التعديل: مسارات مشتركة (admin + employee) — زيارة العميل + بحث العملاء + الفواتير
     Route::middleware('role:admin,employee')->group(function () {
         Route::get('customers/create', [CustomerController::class, 'create'])->name('customers.create');
         Route::post('customers', [CustomerController::class, 'store'])->name('customers.store');
+        // تم الإضافة: بحث AJAX عن العملاء (مستخدم في Quick Sale)
+        Route::get('customers/search', [CustomerController::class, 'search'])->name('customers.search');
+
+        // تم التعديل: الفواتير متاحة للأدمن والموظف (الموظف يشوف فواتيره فقط عبر InvoiceController@index)
+        Route::resource('invoices', InvoiceController::class)->only(['index', 'create', 'store', 'show']);
+        Route::get('invoices/{invoice}/pdf', [InvoiceController::class, 'pdf'])->name('invoices.pdf');
     });
 
     // تم الإضافة: مسارات الأدمن فقط
@@ -91,8 +103,7 @@ Route::middleware('auth')->group(function () {
         // Customers (index فقط للأدمن)
         Route::get('customers', [CustomerController::class, 'index'])->name('customers.index');
 
-        // Invoices (مؤقتًا للأدمن فقط حتى FEATURE 4)
-        Route::resource('invoices', InvoiceController::class)->only(['index', 'create', 'store', 'show']);
+        // إلغاء الفواتير — للأدمن فقط
         Route::post('invoices/{invoice}/cancel', [InvoiceController::class, 'cancel'])->name('invoices.cancel');
 
         // Vaccinations module
@@ -107,5 +118,8 @@ Route::middleware('auth')->group(function () {
 
         // Vaccine Batches module
         Route::resource('vaccine-batches', VaccineBatchController::class)->except('show');
+
+        // تم الإضافة: Users management module للمدير
+        Route::resource('users', UserController::class);
     });
 });
