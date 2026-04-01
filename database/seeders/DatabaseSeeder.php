@@ -13,8 +13,11 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // تم الإضافة: تهيئة أدوار النظام (admin/employee) قبل باقي البيانات
-        $this->call(RolesSeeder::class);
+        // تم الإضافة: تهيئة أدوار النظام (admin/employee) والمستخدمين قبل باقي البيانات
+        $this->call([
+            RolesSeeder::class,
+            UsersSeeder::class,
+        ]);
 
         DB::transaction(function () {
             // 1. Consultation Product (كشف)
