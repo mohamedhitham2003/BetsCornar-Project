@@ -9,17 +9,12 @@ use Spatie\Permission\Models\Role;
 
 class UsersSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        // تم الإضافة: التأكد من وجود الأدوار في حالة عدم تشغيل RolesSeeder مسبقاً
         $adminRole = Role::firstOrCreate(['name' => 'admin']);
         $employeeRole = Role::firstOrCreate(['name' => 'employee']);
 
-        // حساب أدمن (الدكتور)
-        $admin = User::firstOrCreate(
+        $admin = User::updateOrCreate(
             ['email' => 'admin@betscornar.com'],
             [
                 'name' => 'الدكتور',
@@ -28,8 +23,7 @@ class UsersSeeder extends Seeder
         );
         $admin->syncRoles([$adminRole]);
 
-        // حساب موظف (الموظف)
-        $employee = User::firstOrCreate(
+        $employee = User::updateOrCreate(
             ['email' => 'employee@betscornar.com'],
             [
                 'name' => 'الموظف',
